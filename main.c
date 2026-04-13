@@ -30,8 +30,7 @@ struct rte_ether_addr  gw_eth2_mac;
 
 #define MBUF_DATA_SIZE  RTE_MBUF_DEFAULT_BUF_SIZE
 
-#define ETH1_IFACE      "eth1"
-#define ETH2_IFACE      "eth2"
+#define ETH1_IFACE      "enp88s0"
 
 static const struct rte_eth_conf port_conf_default = {
     .rxmode = {
@@ -98,10 +97,10 @@ port_init(uint16_t port, struct rte_mempool *pool)
                    ":%02" PRIx8 ":%02" PRIx8 ":%02" PRIx8 "\n",
            port, RTE_ETHER_ADDR_BYTES(&addr));
 
-    if (port == ETH1_PORT_ID)
+    if (port == ETH1_PORT_ID) {
         rte_ether_addr_copy(&addr, &gw_eth1_mac);
-    else if (port == ETH2_PORT_ID)
         rte_ether_addr_copy(&addr, &gw_eth2_mac);
+    }
 
     return 0;
 }
@@ -155,12 +154,11 @@ main(int argc, char *argv[])
     if (ret < 0)
         rte_exit(EXIT_FAILURE, "EAL initialization failed\n");
 
-    if (rte_eth_dev_count_avail() < 2)
+    if (rte_eth_dev_count_avail() < 1)
         rte_exit(EXIT_FAILURE,
-                 "Need at least 2 Ethernet ports (found %u).\n"
-                 "Bind NICs to a DPDK-compatible driver before launching "
-                 "(e.g. dpdk-devbind.py --bind vfio-pci <PCI_ADDR>).\n",
-                 rte_eth_dev_count_avail());
+                 "No Ethernet ports available.\n"
+                 "Bind the NIC to a DPDK-compatible driver before launching "
+                 "(e.g. dpdk-devbind.py --bind vfio-pci <PCI_ADDR>).\n");
 
     mbuf_pool = rte_pktmbuf_pool_create("MBUF_POOL", NUM_MBUFS,
                                         MBUF_CACHE_SIZE, 0,
@@ -185,19 +183,14 @@ main(int argc, char *argv[])
         rte_exit(EXIT_FAILURE, "Cannot init GW PIT\n");
 
     if (port_init(ETH1_PORT_ID, mbuf_pool) != 0)
-        rte_exit(EXIT_FAILURE, "Cannot init ETH1 port %u (%s)\n", ETH1_PORT_ID, ETH1_IFACE);
+        rte_exit(EXIT_FAILURE, "Cannot init port %u (%s)\n", ETH1_PORT_ID, ETH1_IFACE);
 
-    if (port_init(ETH2_PORT_ID, mbuf_pool) != 0)
-        rte_exit(EXIT_FAILURE, "Cannot init ETH2 port %u (%s)\n", ETH2_PORT_ID, ETH2_IFACE);
-
-    printf("Gateway running: ETH1(%s) <-> ETH2(%s). [Ctrl+C to quit]\n",
-           ETH1_IFACE, ETH2_IFACE);
+    printf("Gateway running on port %u (%s). [Ctrl+C to quit]\n",
+           ETH1_PORT_ID, ETH1_IFACE);
 
     for (;;) {
-        /* ETH1 (IP側) から受信 → ETH2 (CCN側) へ転送 */
-        process_rx_burst(ETH1_PORT_ID, ETH2_PORT_ID);
-        /* ETH2 (CCN側) から受信 → ETH1 (IP側) へ転送 */
-        process_rx_burst(ETH2_PORT_ID, ETH1_PORT_ID);
+        /* 同一NICで受信・処理・送信 */
+        process_rx_burst(ETH1_PORT_ID, ETH1_PORT_ID);
     }
 
     return 0;

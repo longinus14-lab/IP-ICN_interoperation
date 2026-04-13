@@ -9,12 +9,13 @@
  * ゲートウェイ設定定数
  *
  * ネットワーク構成:
- *   IPホスト (10.0.0.1) <-- eth1 (10.0.0.254) --> ゲートウェイ <-- eth2 (192.168.0.254) --> CCNホスト (192.168.0.1)
+ *   IPホスト/CCNホスト (192.168.0.10) <-- enp88s0 (192.168.0.254) --> ゲートウェイ
+ *   受信・送信ともに同一の物理NIC (port 0) を使用する。
  */
 
 /* ---- DPDKポートID ---- */
-#define ETH1_PORT_ID    0   /* IP側インターフェース (eth1) */
-#define ETH2_PORT_ID    1   /* CCN側インターフェース (eth2) */
+#define ETH1_PORT_ID    0   /* 物理NIC (IP/CCN共用) */
+#define ETH2_PORT_ID    0   /* ETH1_PORT_IDと同一 */
 
 /* ---- CCN側 (eth2) 設定 ---- */
 /* CCNホストのIPアドレス (network byte order) */
