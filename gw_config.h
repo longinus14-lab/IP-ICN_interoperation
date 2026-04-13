@@ -9,7 +9,7 @@
  * ゲートウェイ設定定数
  *
  * ネットワーク構成:
- *   IPホスト/CCNホスト (192.168.0.10) <-- enp88s0 (192.168.0.254) --> ゲートウェイ
+ *   ホスト (IP/CCN兼用, 192.168.0.10) <-- enp88s0 --> ゲートウェイ (192.168.0.1)
  *   受信・送信ともに同一の物理NIC (port 0) を使用する。
  */
 
@@ -17,28 +17,20 @@
 #define ETH1_PORT_ID    0   /* 物理NIC (IP/CCN共用) */
 #define ETH2_PORT_ID    0   /* ETH1_PORT_IDと同一 */
 
-/* ---- CCN側 (eth2) 設定 ---- */
-/* CCNホストのIPアドレス (network byte order) */
-#define GW_CCN_HOST_IP_BE   RTE_IPV4(192, 168, 0, 1)
+/* ---- ホスト設定 (IP/CCN兼用) ---- */
+/* ホストのIPアドレス (network byte order) */
+#define GW_HOST_IP_BE       RTE_IPV4(192, 168, 0, 10)
 
-/* CCNホストのMACアドレス */
-#define GW_CCN_HOST_MAC_INIT  { .addr_bytes = { 0xaa, 0xc1, 0xab, 0xe8, 0xa5, 0x48 } }
+/* ホストのMACアドレス (実機の値に合わせて要確認) */
+#define GW_HOST_MAC_INIT    { .addr_bytes = { 0xaa, 0xc1, 0xab, 0xe8, 0xa5, 0x48 } }
 
-/* ゲートウェイ eth2 のIPアドレス (network byte order) */
-#define GW_ETH2_IP_BE       RTE_IPV4(192, 168, 0, 254)
-
-/* ---- IP側 (eth1) 設定 ---- */
-/* IPホストのIPアドレス (network byte order) */
-#define GW_IP_HOST_IP_BE    RTE_IPV4(10, 0, 0, 1)
-
-/* IPホストのMACアドレス */
-#define GW_IP_HOST_MAC_INIT  { .addr_bytes = { 0xaa, 0xc1, 0xab, 0x87, 0xda, 0x1a } }
-
-/* ゲートウェイ eth1 のIPアドレス (network byte order) */
-#define GW_ETH1_IP_BE       RTE_IPV4(10, 0, 0, 254)
+/* ---- ゲートウェイ設定 ---- */
+/* ゲートウェイのIPアドレス (network byte order) */
+#define GW_IP_BE            RTE_IPV4(192, 168, 0, 1)
 
 /* ---- ポート設定 ---- */
-#define GW_IP_HOST_PORT      80     /* IPホストへのHTTPポート */
+#define GW_HTTP_PORT         80     /* HTTPポート */
+#define GW_CCN_UDP_PORT      9695   /* CCNx UDPポート (RFC8609) */
 #define GW_CCN_UDP_SRC_PORT  12345  /* CCN Interest送信時のUDPソースポート */
 
 /* ---- TTL設定 ---- */

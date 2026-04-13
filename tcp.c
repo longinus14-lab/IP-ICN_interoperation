@@ -216,7 +216,7 @@ process_tcp(struct rte_mbuf *m, struct rte_tcp_hdr *tcp,
             rte_eth_tx_burst(ETH1_PORT_ID, 0, &ack_m, 1);
 
         /* 宛先ポートによるアプリケーション層分岐 */
-        if (dst_port == GW_IP_HOST_PORT) {
+        if (dst_port == GW_HTTP_PORT) {
             if (tcb->is_outgoing) {
                 /*
                  * アウトゴイング接続 (CCN→IP) の HTTP レスポンス受信:

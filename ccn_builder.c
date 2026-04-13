@@ -295,13 +295,13 @@ build_ccn_interest(const uint8_t *name_wire, uint16_t name_wire_len)
         return NULL;
     }
 
-    static const struct rte_ether_addr ccn_host_mac = GW_CCN_HOST_MAC_INIT;
+    static const struct rte_ether_addr ccn_host_mac = GW_HOST_MAC_INIT;
     uint8_t *ccn_start = build_eth_ip_udp(
         m,
         &gw_eth2_mac,
         &ccn_host_mac,
-        rte_cpu_to_be_32(GW_ETH2_IP_BE),
-        rte_cpu_to_be_32(GW_CCN_HOST_IP_BE),
+        rte_cpu_to_be_32(GW_IP_BE),
+        rte_cpu_to_be_32(GW_HOST_IP_BE),
         GW_CCN_UDP_SRC_PORT,
         CCN_UDP_PORT,
         udp_payload);
@@ -367,7 +367,7 @@ build_ccn_content_object(const uint8_t *name_wire, uint16_t name_wire_len,
         m,
         &gw_eth2_mac,
         dst_mac,
-        rte_cpu_to_be_32(GW_ETH2_IP_BE),
+        rte_cpu_to_be_32(GW_IP_BE),
         dst_ip_be,
         CCN_UDP_PORT,
         rte_be_to_cpu_16(dst_port_be),
@@ -437,7 +437,7 @@ build_http_get(const struct conn_key *key, struct tcb *tcb, const char *uri)
         return NULL;
     }
 
-    static const struct rte_ether_addr ip_host_mac = GW_IP_HOST_MAC_INIT;
+    static const struct rte_ether_addr ip_host_mac = GW_HOST_MAC_INIT;
     uint8_t *payload = build_eth_ip_tcp(
         m,
         &gw_eth1_mac,
@@ -531,7 +531,7 @@ build_tcp_syn(const struct conn_key *key, struct tcb *tcb)
     if (m == NULL)
         return NULL;
 
-    static const struct rte_ether_addr ip_host_mac = GW_IP_HOST_MAC_INIT;
+    static const struct rte_ether_addr ip_host_mac = GW_HOST_MAC_INIT;
     build_eth_ip_tcp(
         m,
         &gw_eth1_mac,
@@ -559,7 +559,7 @@ build_tcp_ack(const struct conn_key *key, struct tcb *tcb)
     if (m == NULL)
         return NULL;
 
-    static const struct rte_ether_addr ip_host_mac = GW_IP_HOST_MAC_INIT;
+    static const struct rte_ether_addr ip_host_mac = GW_HOST_MAC_INIT;
 
     if (tcb->is_outgoing) {
         /* アウトゴイング接続: key.src=GW, key.dst=IPホスト */
@@ -601,7 +601,7 @@ build_tcp_fin_ack(const struct conn_key *key, struct tcb *tcb)
     if (m == NULL)
         return NULL;
 
-    static const struct rte_ether_addr ip_host_mac = GW_IP_HOST_MAC_INIT;
+    static const struct rte_ether_addr ip_host_mac = GW_HOST_MAC_INIT;
 
     if (tcb->is_outgoing) {
         /*

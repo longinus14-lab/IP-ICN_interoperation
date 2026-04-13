@@ -342,10 +342,10 @@ process_ccn(struct rte_mbuf *m, const uint8_t *buf, uint32_t len,
 
         /* アウトゴイング接続の4タプルキーを生成 */
         struct conn_key out_key = {
-            .src_addr = rte_cpu_to_be_32(GW_ETH1_IP_BE),
-            .dst_addr = rte_cpu_to_be_32(GW_IP_HOST_IP_BE),
+            .src_addr = rte_cpu_to_be_32(GW_IP_BE),
+            .dst_addr = rte_cpu_to_be_32(GW_HOST_IP_BE),
             .src_port = rte_cpu_to_be_16(ephemeral_port_alloc()),
-            .dst_port = rte_cpu_to_be_16(GW_IP_HOST_PORT),
+            .dst_port = rte_cpu_to_be_16(GW_HTTP_PORT),
         };
 
         struct tcb *tcb = conn_insert(&out_key);
