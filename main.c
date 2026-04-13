@@ -28,10 +28,8 @@ struct rte_ether_addr  gw_eth2_mac;
 #define MBUF_CACHE_SIZE 250
 #define BURST_SIZE      32
 
-/* net_af_packetはJumbo Frame非対応のため標準MTUを使用 */
 #define MBUF_DATA_SIZE  RTE_MBUF_DEFAULT_BUF_SIZE
 
-/* 旧 RX_IFACE / TX_IFACE を維持 (AF_PACKET バインド用) */
 #define ETH1_IFACE      "eth1"
 #define ETH2_IFACE      "eth2"
 
@@ -108,16 +106,6 @@ port_init(uint16_t port, struct rte_mempool *pool)
     return 0;
 }
 
-static void
-add_vdev_if_needed(const char *name, const char *iface)
-{
-    char args[64];
-    snprintf(args, sizeof(args), "iface=%s", iface);
-    if (rte_eal_hotplug_add("vdev", name, args) != 0)
-        rte_exit(EXIT_FAILURE, "Failed to bind to %s\n", iface);
-    printf("Bound %s via AF_PACKET.\n", iface);
-}
-
 /*
  * 1バースト分の受信・処理・転送
  *
@@ -167,17 +155,12 @@ main(int argc, char *argv[])
     if (ret < 0)
         rte_exit(EXIT_FAILURE, "EAL initialization failed\n");
 
-    if (rte_eth_dev_count_avail() < 2) {
-        printf("Insufficient ports. Binding %s and %s via AF_PACKET...\n",
-               ETH1_IFACE, ETH2_IFACE);
-        if (rte_eth_dev_count_avail() < 1)
-            add_vdev_if_needed("net_af_packet0", ETH1_IFACE);
-        if (rte_eth_dev_count_avail() < 2)
-            add_vdev_if_needed("net_af_packet1", ETH2_IFACE);
-    }
-
     if (rte_eth_dev_count_avail() < 2)
-        rte_exit(EXIT_FAILURE, "Need at least 2 Ethernet ports\n");
+        rte_exit(EXIT_FAILURE,
+                 "Need at least 2 Ethernet ports (found %u).\n"
+                 "Bind NICs to a DPDK-compatible driver before launching "
+                 "(e.g. dpdk-devbind.py --bind vfio-pci <PCI_ADDR>).\n",
+                 rte_eth_dev_count_avail());
 
     mbuf_pool = rte_pktmbuf_pool_create("MBUF_POOL", NUM_MBUFS,
                                         MBUF_CACHE_SIZE, 0,
