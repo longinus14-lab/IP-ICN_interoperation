@@ -316,12 +316,18 @@ build_ccn_interest(const uint8_t *name_wire, uint16_t name_wire_len)
 
     /*
      * CCNx Interest パケットレイアウト (全て連続):
-     *   ccn_fixed_hdr (8B)
+     *   ccn_fixed_hdr        (8B)
+     *   T_INTLIFE opt header  (6B): Type(2) + Length(2) + Value(2, ms単位 uint16_t)
      *   T_INTEREST TLV header (4B)
-     *   name_with_chunk (new_name_wire_len B)
+     *   name_with_chunk       (new_name_wire_len B)
+     *
+     * RFC8609 Section 3.2: Interest Lifetime は固定ヘッダ直後のオプショナルヘッダ領域に配置。
+     * hdr_len = 固定ヘッダ(8B) + オプショナルヘッダ(6B) = 14
      */
+    const uint16_t intlife_opt_len = 6;  /* T(2) + L(2) + V(2) */
     uint16_t msg_value_len = new_name_wire_len;
-    uint16_t ccn_total     = (uint16_t)(CCN_FIXED_HEADER_LEN + 4 + msg_value_len);
+    uint16_t ccn_total     = (uint16_t)(CCN_FIXED_HEADER_LEN + intlife_opt_len +
+                                         4 + msg_value_len);
     uint16_t udp_payload   = ccn_total;
 
     uint16_t pkt_total = (uint16_t)(RTE_ETHER_HDR_LEN +
@@ -360,10 +366,16 @@ build_ccn_interest(const uint8_t *name_wire, uint16_t name_wire_len)
     fh->hop_limit = GW_CCN_HOP_LIMIT;
     fh->reserved1 = 0;
     fh->reserved2 = 0;
-    fh->hdr_len   = CCN_FIXED_HEADER_LEN;
+    fh->hdr_len   = (uint8_t)(CCN_FIXED_HEADER_LEN + intlife_opt_len);
+
+    /* T_INTLIFE オプショナルヘッダ (RFC8609 Section 3.2) */
+    uint8_t *p = ccn_start + CCN_FIXED_HEADER_LEN;
+    p += write_tlv_header(p, CCN_T_INTLIFE, 2);
+    uint16_t lifetime_be = rte_cpu_to_be_16(GW_CCN_INTEREST_LIFETIME_MS);
+    memcpy(p, &lifetime_be, 2);
+    p += 2;
 
     /* T_INTEREST TLV */
-    uint8_t *p = ccn_start + CCN_FIXED_HEADER_LEN;
     p += write_tlv_header(p, CCN_T_INTEREST, msg_value_len);
 
     /* Name TLV (チャンクセグメント付き) */
