@@ -286,10 +286,22 @@ process_tcp(struct rte_mbuf *m, struct rte_tcp_hdr *tcp,
 
         tcb->snd_una = recv_ack;
 
-        /* TCPペイロード先頭と長さを計算 */
+        /* TCPペイロード先頭と長さを計算
+         *
+         * m->pkt_len ではなく IP total_length を基に計算する。
+         * Ethernet は最小フレーム 60 バイトを保証するためパディングを付加する
+         * ことがあり、m->pkt_len にはそのパディングが含まれる。
+         * IP total_length はパディングを含まない実際の長さを示すため、
+         * これを使って正確なペイロード長を求める。
+         */
+        const struct rte_ipv4_hdr *ip_hdr = rte_pktmbuf_mtod_offset(
+            m, const struct rte_ipv4_hdr *, RTE_ETHER_HDR_LEN);
+        uint16_t ip_total_len = rte_be_to_cpu_16(ip_hdr->total_length);
+        uint16_t ip_hdr_len   = (uint16_t)((ip_hdr->version_ihl & 0x0f) * 4);
+        int32_t  payload_len_i = (int32_t)ip_total_len - ip_hdr_len - data_off;
+        uint16_t payload_len   = (payload_len_i > 0) ? (uint16_t)payload_len_i : 0;
+
         const char *payload = (const char *)tcp + data_off;
-        const char *pkt_end = rte_pktmbuf_mtod(m, const char *) + m->pkt_len;
-        uint16_t payload_len = (uint16_t)(pkt_end - payload);
 
         if (payload_len == 0)
             return 0;
