@@ -272,12 +272,55 @@ struct rte_mbuf *
 build_ccn_interest(const uint8_t *name_wire, uint16_t name_wire_len)
 {
     /*
+     * チャンク番号セグメント (chunk 0) を T_NAME TLV に追記する。
+     *
+     * エンコード (RFC8609 Section 3.3.3 / CCNx Name Component Registry):
+     *   Type:   CCN_T_CHUNK (0x0005, 2バイト)
+     *   Length: 0x0001     (1バイト値)
+     *   Value:  0x00       (チャンク番号 0、ネットワークバイトオーダーの符号なし整数)
+     */
+    static const uint8_t chunk_seg[] = {
+        0x00, CCN_T_CHUNK & 0xff,  /* Type  = 0x0005 */
+        0x00, 0x01,                /* Length = 1     */
+        0x00,                      /* Value  = 0     */
+    };
+    const uint16_t chunk_seg_len = (uint16_t)sizeof(chunk_seg);
+
+    /*
+     * name_wire の T_NAME Length フィールド (bytes [2:4]) を更新し、
+     * チャンクセグメントを末尾に付加した新しい name wire を構築する。
+     *
+     * name_wire レイアウト:
+     *   [0x00 0x00]       T_NAME Type  (2B)
+     *   [LenHigh LenLow]  T_NAME Length(2B)
+     *   [segments...]     Name セグメント列
+     */
+    if (name_wire_len < 4)
+        return NULL;
+
+    uint8_t name_with_chunk[TCB_CCN_NAME_WIRE_MAX];
+    uint16_t new_name_wire_len = (uint16_t)(name_wire_len + chunk_seg_len);
+    if (new_name_wire_len > TCB_CCN_NAME_WIRE_MAX)
+        return NULL;
+
+    memcpy(name_with_chunk, name_wire, name_wire_len);
+
+    /* T_NAME Length を chunk_seg_len 分増やす */
+    uint16_t name_val_len = (uint16_t)((name_wire[2] << 8) | name_wire[3]);
+    name_val_len = (uint16_t)(name_val_len + chunk_seg_len);
+    name_with_chunk[2] = (uint8_t)(name_val_len >> 8);
+    name_with_chunk[3] = (uint8_t)(name_val_len & 0xff);
+
+    /* チャンクセグメントを末尾に追加 */
+    memcpy(name_with_chunk + name_wire_len, chunk_seg, chunk_seg_len);
+
+    /*
      * CCNx Interest パケットレイアウト (全て連続):
      *   ccn_fixed_hdr (8B)
      *   T_INTEREST TLV header (4B)
-     *   name_wire (name_wire_len B)
+     *   name_with_chunk (new_name_wire_len B)
      */
-    uint16_t msg_value_len = name_wire_len;   /* Message本体 = Name TLVのみ */
+    uint16_t msg_value_len = new_name_wire_len;
     uint16_t ccn_total     = (uint16_t)(CCN_FIXED_HEADER_LEN + 4 + msg_value_len);
     uint16_t udp_payload   = ccn_total;
 
@@ -323,8 +366,8 @@ build_ccn_interest(const uint8_t *name_wire, uint16_t name_wire_len)
     uint8_t *p = ccn_start + CCN_FIXED_HEADER_LEN;
     p += write_tlv_header(p, CCN_T_INTEREST, msg_value_len);
 
-    /* Name TLV (name_wire はすでに T_NAME TLV 全体) */
-    memcpy(p, name_wire, name_wire_len);
+    /* Name TLV (チャンクセグメント付き) */
+    memcpy(p, name_with_chunk, new_name_wire_len);
 
     return m;
 }

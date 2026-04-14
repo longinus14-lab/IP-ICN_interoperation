@@ -39,6 +39,7 @@
 /* ---- Name セグメントのTLVタイプ (RFC8609 Section 3.3.3) ---- */
 #define CCN_T_NAMESEGMENT       0x0001  /* 汎用Nameセグメント */
 #define CCN_T_IPID              0x0002  /* Interest Payload ID */
+#define CCN_T_CHUNK             0x0005  /* チャンク番号 (ネットワークバイトオーダーの符号なし整数) */
 
 /* ---- Optional Header のTLVタイプ (RFC8609 Section 3.2) ---- */
 #define CCN_T_INTLIFE           0x0001  /* Interest Lifetime (2バイト, ms) */
