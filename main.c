@@ -7,7 +7,6 @@
 #include <rte_dev.h>
 #include <rte_ether.h>
 #include "connection.h"
-#include "cs.h"
 #include "fib.h"
 #include "pit.h"
 #include "gw_pit.h"
@@ -169,9 +168,6 @@ main(int argc, char *argv[])
 
     if (conn_table_init() != 0)
         rte_exit(EXIT_FAILURE, "Cannot init connection table\n");
-
-    if (cs_init() != 0)
-        rte_exit(EXIT_FAILURE, "Cannot init content store\n");
 
     if (fib_init() != 0)
         rte_exit(EXIT_FAILURE, "Cannot init FIB\n");

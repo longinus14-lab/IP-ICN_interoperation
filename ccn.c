@@ -9,7 +9,6 @@
 #include <rte_random.h>
 #include "ccn.h"
 #include "gw_pit.h"
-#include "cs.h"
 #include "gw_config.h"
 #include "connection.h"
 #include "ccn_builder.h"
@@ -323,13 +322,6 @@ process_ccn(struct rte_mbuf *m, const uint8_t *buf, uint32_t len,
         printf(" hop_limit=%u lifetime=%ums\n",
                i->hop_limit, i->lifetime_ms);
 
-        /* CS検索: キャッシュヒットなら将来的に直接応答可能 */
-        struct cs_entry *cs = cs_lookup(i->name.wire, i->name.wire_len);
-        if (cs != NULL) {
-            printf("    CCN: CS hit (name_wire_len=%u)\n", i->name.wire_len);
-            /* 今後: CS からコンテンツを取得して CCN Content Object を送信 */
-        }
-
         /*
          * CCN→IP 変換:
          * 1. name_wire をコピーしてアウトゴイング TCB に保存
@@ -397,13 +389,6 @@ process_ccn(struct rte_mbuf *m, const uint8_t *buf, uint32_t len,
                 if (resp_m != NULL)
                     rte_eth_tx_burst(ETH1_PORT_ID, 0, &resp_m, 1);
             }
-        }
-
-        /* CS挿入: Content Object をキャッシュ (現在スタブ) */
-        if (c->payload != NULL) {
-            cs_insert(c->name.wire, c->name.wire_len,
-                      c->payload, c->payload_len,
-                      c->payload_type, 0);
         }
 
     } else {
