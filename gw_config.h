@@ -22,7 +22,7 @@
 #define GW_HOST_IP_BE       RTE_IPV4(192, 168, 0, 10)
 
 /* ホストのMACアドレス (実機の値に合わせて要確認) */
-#define GW_HOST_MAC_INIT    { .addr_bytes = { 0xaa, 0xc1, 0xab, 0xe8, 0xa5, 0x48 } }
+#define GW_HOST_MAC_INIT    { .addr_bytes = { 0x1c, 0x69, 0x7a, 0xa5, 0x63, 0xa4 } }
 
 /* ---- ゲートウェイ設定 ---- */
 /* ゲートウェイのIPアドレス (network byte order) */
