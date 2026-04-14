@@ -38,7 +38,7 @@
 #define GW_CCN_HOP_LIMIT     32
 
 /* ---- CCN Interest デフォルトLifetime (ms) ---- */
-#define GW_CCN_INTEREST_LIFETIME_MS  4000
+#define GW_CCN_INTEREST_LIFETIME_MS  2000
 
 /*
  * ゲートウェイ自身のMACアドレス (main.cでrte_eth_macaddr_getして格納)
