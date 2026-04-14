@@ -180,7 +180,7 @@ build_eth_ip_udp(struct rte_mbuf *m,
     ip->type_of_service = 0;
     ip->total_length    = rte_cpu_to_be_16(ip_total);
     ip->packet_id       = 0;
-    ip->fragment_offset = 0;
+    ip->fragment_offset = rte_cpu_to_be_16(RTE_IPV4_HDR_DF_FLAG);
     ip->time_to_live    = GW_DEFAULT_TTL;
     ip->next_proto_id   = IPPROTO_UDP;
     ip->src_addr        = src_ip_be;
@@ -240,7 +240,7 @@ build_eth_ip_tcp(struct rte_mbuf *m,
     ip->type_of_service = 0;
     ip->total_length    = rte_cpu_to_be_16(ip_total);
     ip->packet_id       = 0;
-    ip->fragment_offset = 0;
+    ip->fragment_offset = rte_cpu_to_be_16(RTE_IPV4_HDR_DF_FLAG);
     ip->time_to_live    = GW_DEFAULT_TTL;
     ip->next_proto_id   = IPPROTO_TCP;
     ip->src_addr        = src_ip_be;
