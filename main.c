@@ -1,17 +1,21 @@
 #include <stdint.h>
 #include <inttypes.h>
+#include <signal.h>
 #include <rte_eal.h>
 #include <rte_ethdev.h>
 #include <rte_mbuf.h>
 #include <rte_log.h>
 #include <rte_dev.h>
 #include <rte_ether.h>
+#include <rte_hash.h>
 #include "connection.h"
 #include "fib.h"
 #include "pit.h"
 #include "gw_pit.h"
 #include "l2.h"
 #include "gw_config.h"
+
+static volatile bool force_quit;
 
 /*
  * グローバルリソース
@@ -30,6 +34,15 @@ struct rte_ether_addr  gw_eth2_mac;
 #define MBUF_DATA_SIZE  RTE_MBUF_DEFAULT_BUF_SIZE
 
 #define ETH1_IFACE      "enp88s0"
+
+static void
+signal_handler(int signum)
+{
+    if (signum == SIGINT || signum == SIGTERM) {
+        printf("\nSignal %d received, preparing to exit...\n", signum);
+        force_quit = true;
+    }
+}
 
 static const struct rte_eth_conf port_conf_default = {
     .rxmode = {
@@ -184,10 +197,39 @@ main(int argc, char *argv[])
     printf("Gateway running on port %u (%s). [Ctrl+C to quit]\n",
            ETH1_PORT_ID, ETH1_IFACE);
 
-    for (;;) {
+    force_quit = false;
+    signal(SIGINT,  signal_handler);
+    signal(SIGTERM, signal_handler);
+
+    while (!force_quit) {
         /* 同一NICで受信・処理・送信 */
         process_rx_burst(ETH1_PORT_ID, ETH1_PORT_ID);
     }
 
+    /* ---- クリーンアップ ---- */
+
+    /* NICを停止・クローズ */
+    printf("Closing port %u...\n", ETH1_PORT_ID);
+    rte_eth_dev_stop(ETH1_PORT_ID);
+    rte_eth_dev_close(ETH1_PORT_ID);
+
+    /* mbufプールを解放 */
+    rte_mempool_free(mbuf_pool);
+
+    /* コネクションテーブル (connection.cのextern変数を直接解放) */
+    rte_hash_free(conn_table);
+    rte_mempool_free(tcb_pool);
+
+    /* FIB / PIT / GW_PIT (名前でルックアップして解放) */
+    rte_hash_free(rte_hash_find_existing("fib_hash"));
+    rte_mempool_free(rte_mempool_lookup("fib_pool"));
+    rte_hash_free(rte_hash_find_existing("pit_hash"));
+    rte_mempool_free(rte_mempool_lookup("pit_pool"));
+    rte_hash_free(rte_hash_find_existing("gw_pit_hash"));
+    rte_mempool_free(rte_mempool_lookup("gw_pit_pool"));
+
+    rte_eal_cleanup();
+
+    printf("Bye...\n");
     return 0;
 }
