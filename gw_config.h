@@ -31,7 +31,7 @@
 /* ---- ポート設定 ---- */
 #define GW_HTTP_PORT         80     /* HTTPポート */
 #define GW_CCN_UDP_PORT      9695   /* CCNx UDPポート (RFC8609) */
-#define GW_CCN_UDP_SRC_PORT  12345  /* CCN Interest送信時のUDPソースポート */
+#define GW_CCN_UDP_SRC_PORT  9695   /* CCN Interest送信時のUDPソースポート (RFC8609) */
 
 /* ---- TTL設定 ---- */
 #define GW_DEFAULT_TTL       64
