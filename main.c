@@ -154,9 +154,7 @@ process_rx_burst(uint16_t rx_port, uint16_t tx_port)
     if (nb_fwd == 0)
         return;
 
-    uint16_t nb_tx = rte_eth_tx_burst(tx_port, 0, fwd_bufs, nb_fwd);
-    for (uint16_t i = nb_tx; i < nb_fwd; i++)
-        rte_pktmbuf_free(fwd_bufs[i]);
+    tx_burst_log(tx_port, fwd_bufs, nb_fwd);
 }
 
 int

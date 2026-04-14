@@ -6,6 +6,7 @@
 #include <rte_tcp.h>
 #include <rte_random.h>
 #include <rte_ethdev.h>
+#include "l2.h"
 #include "tcp.h"
 #include "connection.h"
 #include "http.h"
@@ -186,8 +187,7 @@ process_tcp(struct rte_mbuf *m, struct rte_tcp_hdr *tcp,
                                    sizeof(struct rte_ipv4_hdr) +
                                    sizeof(struct rte_tcp_hdr) + 4;
 
-        if (rte_eth_tx_burst(ETH1_PORT_ID, 0, &m, 1) == 0)
-            rte_pktmbuf_free(m);
+        tx_burst_log(ETH1_PORT_ID, &m, 1);
 
         printf("    TCP: SYN-ACK sent (iss=%u ack=%u) src_port=%u dst_port=%u\n",
                iss, pe->rcv_nxt, dst_port, src_port);
@@ -207,7 +207,7 @@ process_tcp(struct rte_mbuf *m, struct rte_tcp_hdr *tcp,
                  */
                 struct rte_mbuf *ack_m = build_tcp_ack(key, tcb);
                 if (ack_m != NULL)
-                    rte_eth_tx_burst(ETH1_PORT_ID, 0, &ack_m, 1);
+                    tx_burst_log(ETH1_PORT_ID, &ack_m, 1);
 
                 /* CCN名前 → URI変換 */
                 char uri[256];
@@ -222,7 +222,7 @@ process_tcp(struct rte_mbuf *m, struct rte_tcp_hdr *tcp,
 
                 struct rte_mbuf *get_m = build_http_get(key, tcb, uri);
                 if (get_m != NULL)
-                    rte_eth_tx_burst(ETH1_PORT_ID, 0, &get_m, 1);
+                    tx_burst_log(ETH1_PORT_ID, &get_m, 1);
 
                 printf("    TCP: outgoing SYN-ACK → ACK+HTTP GET sent uri=%s\n", uri);
             } else {
@@ -239,7 +239,7 @@ process_tcp(struct rte_mbuf *m, struct rte_tcp_hdr *tcp,
 
             struct rte_mbuf *fin_ack_m = build_tcp_fin_ack(key, tcb);
             if (fin_ack_m != NULL)
-                rte_eth_tx_burst(ETH1_PORT_ID, 0, &fin_ack_m, 1);
+                tx_burst_log(ETH1_PORT_ID, &fin_ack_m, 1);
 
             conn_delete(key);
             printf("    TCP: FIN received, FIN-ACK sent, connection closed\n");
@@ -300,7 +300,7 @@ process_tcp(struct rte_mbuf *m, struct rte_tcp_hdr *tcp,
         /* データ受信に対する ACK を送信する */
         struct rte_mbuf *ack_m = build_tcp_ack(key, tcb);
         if (ack_m != NULL)
-            rte_eth_tx_burst(ETH1_PORT_ID, 0, &ack_m, 1);
+            tx_burst_log(ETH1_PORT_ID, &ack_m, 1);
 
         /* 宛先ポートによるアプリケーション層分岐 */
         if (dst_port == GW_HTTP_PORT) {
@@ -321,7 +321,7 @@ process_tcp(struct rte_mbuf *m, struct rte_tcp_hdr *tcp,
                     tcb->ccn_src_port);
 
                 if (co_m != NULL)
-                    rte_eth_tx_burst(ETH2_PORT_ID, 0, &co_m, 1);
+                    tx_burst_log(ETH2_PORT_ID, &co_m, 1);
 
                 return 0;
             } else {
@@ -341,7 +341,7 @@ process_tcp(struct rte_mbuf *m, struct rte_tcp_hdr *tcp,
                         /* CCN Interest を構築して ETH2 (CCN側) へ送信 */
                         struct rte_mbuf *im = build_ccn_interest(name_wire, name_wire_len);
                         if (im != NULL)
-                            rte_eth_tx_burst(ETH2_PORT_ID, 0, &im, 1);
+                            tx_burst_log(ETH2_PORT_ID, &im, 1);
 
                         /* gw_pit に登録 (CCN Content Object 到着時に応答先を解決) */
                         gw_pit_insert(name_wire, name_wire_len, key, tcb,

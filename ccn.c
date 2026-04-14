@@ -7,6 +7,7 @@
 #include <rte_udp.h>
 #include <rte_ethdev.h>
 #include <rte_random.h>
+#include "l2.h"
 #include "ccn.h"
 #include "gw_pit.h"
 #include "gw_config.h"
@@ -364,7 +365,7 @@ process_ccn(struct rte_mbuf *m, const uint8_t *buf, uint32_t len,
         /* TCP SYN を IP ホストへ送信 */
         struct rte_mbuf *syn_m = build_tcp_syn(&out_key, tcb);
         if (syn_m != NULL)
-            rte_eth_tx_burst(ETH1_PORT_ID, 0, &syn_m, 1);
+            tx_burst_log(ETH1_PORT_ID, &syn_m, 1);
 
         printf("    CCN: TCP SYN sent to IP host for uri\n");
 
@@ -387,7 +388,7 @@ process_ccn(struct rte_mbuf *m, const uint8_t *buf, uint32_t len,
                      c->payload,
                      (uint32_t)c->payload_len);
                 if (resp_m != NULL)
-                    rte_eth_tx_burst(ETH1_PORT_ID, 0, &resp_m, 1);
+                    tx_burst_log(ETH1_PORT_ID, &resp_m, 1);
             }
         }
 
