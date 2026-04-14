@@ -13,6 +13,66 @@
 #include "gw_pit.h"
 #include "ccn_builder.h"
 
+/*
+ * ハーフオープンコネクション一時テーブル
+ *
+ * インカミング接続の SYN 受信時に conn_table へは追加せず、
+ * ここに一時保存する。3-way ハンドシェイク完了 (ACK 受信) 時に
+ * conn_table へ移行して TCP_ESTABLISHED にセットする。
+ */
+#define PENDING_MAX 64
+
+struct pending_entry {
+    int                   in_use;
+    struct conn_key       key;
+    uint32_t              iss;      /* GW が SYN-ACK で送った ISS */
+    uint32_t              rcv_nxt;  /* ホストの ISN + 1 */
+    struct rte_ether_addr peer_mac;
+};
+
+static struct pending_entry pending_table[PENDING_MAX];
+
+static struct pending_entry *
+pending_lookup(const struct conn_key *key)
+{
+    for (int i = 0; i < PENDING_MAX; i++) {
+        if (pending_table[i].in_use &&
+            memcmp(&pending_table[i].key, key, sizeof(*key)) == 0)
+            return &pending_table[i];
+    }
+    return NULL;
+}
+
+static struct pending_entry *
+pending_alloc(const struct conn_key *key)
+{
+    /* 再送SYN: 既存エントリを再利用 */
+    struct pending_entry *e = pending_lookup(key);
+    if (e != NULL)
+        return e;
+
+    for (int i = 0; i < PENDING_MAX; i++) {
+        if (!pending_table[i].in_use) {
+            pending_table[i].in_use = 1;
+            pending_table[i].key    = *key;
+            return &pending_table[i];
+        }
+    }
+    return NULL;
+}
+
+static void
+pending_delete(const struct conn_key *key)
+{
+    for (int i = 0; i < PENDING_MAX; i++) {
+        if (pending_table[i].in_use &&
+            memcmp(&pending_table[i].key, key, sizeof(*key)) == 0) {
+            pending_table[i].in_use = 0;
+            return;
+        }
+    }
+}
+
 int
 process_tcp(struct rte_mbuf *m, struct rte_tcp_hdr *tcp,
             const struct conn_key *key)
@@ -51,29 +111,30 @@ process_tcp(struct rte_mbuf *m, struct rte_tcp_hdr *tcp,
     }
 
     if (is_syn && !is_ack) {
-        /* SYNのみ: 新規コネクション確立要求 (3-wayハンドシェイク 第1段) */
-        if (tcb != NULL) {
-            /* 既存エントリがあれば上書き (再送SYN対応) */
-            conn_delete(key);
-        }
-        tcb = conn_insert(key);
-        if (tcb == NULL) {
-            printf("    TCP: failed to allocate TCB, dropping SYN\n");
-            return 0;
-        }
-        tcb->state      = TCP_SYN_RCVD;
-        tcb->rcv_nxt    = sent_seq + 1;
-        tcb->rcv_wnd    = rte_be_to_cpu_16(tcp->rx_win);
-        tcb->is_outgoing = 0;
+        /*
+         * SYNのみ: インカミング接続の確立要求 (3-wayハンドシェイク 第1段)
+         * conn_table にはまだ追加せず pending_table に一時保存する。
+         */
 
-        /* 相手のMAC を保存 (HTTP応答の宛先MAC として使用) */
+        /* 既存のconn_tableエントリがあれば削除 (RST後の再接続など) */
+        if (tcb != NULL)
+            conn_delete(key);
+
+        struct pending_entry *pe = pending_alloc(key);
+        if (pe == NULL) {
+            printf("    TCP: pending table full, dropping SYN\n");
+            rte_pktmbuf_free(m);
+            return -1;
+        }
+
+        pe->rcv_nxt = sent_seq + 1;
+
         struct rte_ether_hdr *eth = rte_pktmbuf_mtod(m, struct rte_ether_hdr *);
-        rte_ether_addr_copy(&eth->src_addr, &tcb->peer_mac);
+        rte_ether_addr_copy(&eth->src_addr, &pe->peer_mac);
 
         /* ISS (Initial Send Sequence) をランダムに生成 */
         uint32_t iss = (uint32_t)rte_rand();
-        tcb->snd_una = iss;
-        tcb->snd_nxt = iss + 1;
+        pe->iss = iss;
 
         /* SYNパケットをin-placeでSYN-ACKに書き換える */
 
@@ -95,7 +156,7 @@ process_tcp(struct rte_mbuf *m, struct rte_tcp_hdr *tcp,
         tcp->src_port     = tcp->dst_port;
         tcp->dst_port     = tmp_port;
         tcp->sent_seq     = rte_cpu_to_be_32(iss);
-        tcp->recv_ack     = rte_cpu_to_be_32(tcb->rcv_nxt);
+        tcp->recv_ack     = rte_cpu_to_be_32(pe->rcv_nxt);
         tcp->tcp_flags    = RTE_TCP_SYN_FLAG | RTE_TCP_ACK_FLAG;
         tcp->data_off     = ((sizeof(struct rte_tcp_hdr) + 4) / 4) << 4; /* 24バイト (MSS option込み) */
         tcp->rx_win       = rte_cpu_to_be_16(65535);
@@ -104,10 +165,10 @@ process_tcp(struct rte_mbuf *m, struct rte_tcp_hdr *tcp,
 
         /* TCPオプション: MSS (kind=2, length=4, value=9460) */
         uint8_t *opt = (uint8_t *)(tcp + 1);
-        opt[0] = 0x02;          /* kind: Maximum Segment Size */
-        opt[1] = 0x04;          /* length */
-        opt[2] = (9460 >> 8) & 0xff;   /* MSS high byte (0x24) */
-        opt[3] =  9460        & 0xff;  /* MSS low  byte (0xF4) */
+        opt[0] = 0x02;
+        opt[1] = 0x04;
+        opt[2] = (9460 >> 8) & 0xff;
+        opt[3] =  9460        & 0xff;
 
         /* IPv4 total_length を MSS option (4バイト) 分だけ更新してチェックサム再計算 */
         ip->total_length = rte_cpu_to_be_16(
@@ -115,7 +176,7 @@ process_tcp(struct rte_mbuf *m, struct rte_tcp_hdr *tcp,
         ip->hdr_checksum = 0;
         ip->hdr_checksum = rte_ipv4_cksum(ip);
 
-        /* TCPチェックサム再計算 (options を含む tcp セグメント全体対象) */
+        /* TCPチェックサム再計算 */
         m->l2_len  = RTE_ETHER_HDR_LEN;
         m->l3_len  = sizeof(struct rte_ipv4_hdr);
         tcp->cksum = rte_ipv4_udptcp_cksum(ip, tcp);
@@ -125,15 +186,11 @@ process_tcp(struct rte_mbuf *m, struct rte_tcp_hdr *tcp,
                                    sizeof(struct rte_ipv4_hdr) +
                                    sizeof(struct rte_tcp_hdr) + 4;
 
-        /* SYN-ACK を受信ポート (ETH1) へ直接送信する。
-         * 転送ロジック (process_rx_burst) に委ねると tx_port (ETH2) へ
-         * 送出されてしまうため、ここで明示的に送信して -1 を返す。
-         * 呼び出し元は -1 を「mbuf 消費済み」として扱い、解放・転送しない。 */
         if (rte_eth_tx_burst(ETH1_PORT_ID, 0, &m, 1) == 0)
             rte_pktmbuf_free(m);
 
         printf("    TCP: SYN-ACK sent (iss=%u ack=%u) src_port=%u dst_port=%u\n",
-               iss, tcb->rcv_nxt, dst_port, src_port);
+               iss, pe->rcv_nxt, dst_port, src_port);
         return -1;
 
     } else if (is_syn && is_ack) {
@@ -190,9 +247,39 @@ process_tcp(struct rte_mbuf *m, struct rte_tcp_hdr *tcp,
         return 0;
 
     } else {
-        /* データ転送: コネクション確立済みホストからの要求か確認 */
-        if (tcb == NULL || tcb->state != TCP_ESTABLISHED) {
-            printf("    TCP: DROP no established connection src_port=%u dst_port=%u\n",
+        /* データ転送 or 3-wayハンドシェイク完了ACK */
+        if (tcb == NULL) {
+            /*
+             * conn_table にエントリがない場合、pending_table を確認する。
+             * GW の SYN-ACK に対するホストの ACK (第3段) であれば
+             * conn_table に登録して TCP_ESTABLISHED へ遷移する。
+             */
+            struct pending_entry *pe = pending_lookup(key);
+            if (pe != NULL && is_ack && recv_ack == pe->iss + 1) {
+                tcb = conn_insert(key);
+                if (tcb == NULL) {
+                    printf("    TCP: failed to allocate TCB on ACK\n");
+                    return 0;
+                }
+                tcb->state       = TCP_ESTABLISHED;
+                tcb->rcv_nxt     = pe->rcv_nxt;
+                tcb->snd_nxt     = pe->iss + 1;
+                tcb->snd_una     = pe->iss + 1;
+                tcb->rcv_wnd     = rte_be_to_cpu_16(tcp->rx_win);
+                tcb->is_outgoing = 0;
+                rte_ether_addr_copy(&pe->peer_mac, &tcb->peer_mac);
+                pending_delete(key);
+                printf("    TCP: ESTABLISHED (3-way complete) src_port=%u dst_port=%u\n",
+                       src_port, dst_port);
+            } else {
+                printf("    TCP: DROP no established connection src_port=%u dst_port=%u\n",
+                       src_port, dst_port);
+                return 0;
+            }
+        }
+
+        if (tcb->state != TCP_ESTABLISHED) {
+            printf("    TCP: DROP not ESTABLISHED src_port=%u dst_port=%u\n",
                    src_port, dst_port);
             return 0;
         }
